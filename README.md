@@ -6,5 +6,5 @@ Also, an example of a high-quality project for us will be [Autoregressive Denois
 
 
 # An approximate description of the operation of the algorithm
-First, the time series data goes into the RNN layer to generate the distribution parameters.
+First, the time series data goes into the RNN layer to generate the distribution parameters.  
 At the second stage, samples are generated from the distribution and they are projected onto the space of hierarchical.  This projected data is considered to be the predictions of the model. 
