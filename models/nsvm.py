@@ -57,21 +57,35 @@ class GenNet(nn.Module):
 
         return x, mean_x, logvar_x
 
+class NSVM(nn.Module):
+    def __init__(self, input_dim, hidden_dim, latent_dim):
+        super().__init__()
+        self.gen = GenNet(input_dim, hidden_dim, latent_dim)
+        self.inf = InfNet(input_dim, hidden_dim, latent_dim)
+        self.beta = 0.1
 
-inf = InfNet(10, 16, 5)
-gen = GenNet(10, 16, 5)
+    def forward(self, x, noise=True):
+        z, mu_z, logvar_z = self.inf(x)
+        if noise == False:
+            z = mu_z.unsqueeze(0)
+        x, mu_x, logvar_x = self.gen(x, z)
+        return mu_x, logvar_x, mu_z, logvar_z
 
-optim_inf = torch.optim.Adam(inf.parameters())
-optim_gen = torch.optim.Adam(gen.parameters())
+    def loss(self, x, y):
+        mu_x, logvar_x, mu_z, logvar_z = self(x)
+        recon_loss = torch.mean((mu_x[:-1] - y) ** 2 / 2 / torch.exp(2 * logvar_x[:-1]) + logvar_x[:-1])
+        kld_loss = torch.mean(-0.5 * torch.sum(1 + logvar_z - mu_z ** 2 - logvar_z.exp(), dim = 1), dim = 0)
+        loss = recon_loss + self.beta * kld_loss
+        return loss
 
-for _ in tqdm.trange(200):
-    optim_gen.zero_grad()
-    optim_inf.zero_grad()
-
-    z, _, _ = inf(X_train_t)
-    _, mu_x, logvar_x = gen(X_train_t, z)
-    loss = torch.mean((mu_x[:-1] - Xs[0, 1:, -1:]) ** 2 / torch.exp(logvar_x[:-1]) + logvar_x[:-1])
-    loss.backward(retain_graph=True)
-
-    optim_gen.step()
-    optim_inf.step()
+    def predict(self, x, noise=True):
+        with torch.no_grad():
+            y_hat = self(x, noise)
+        return y_hat
+    
+    def multi_predict(self, x, n, noise=True):
+        x_new = torch.clone(x)
+        for _ in range(n):
+            x_pred = self.predict(x_new[-xwid:])
+            x_new = torch.cat([x, x_pred])
+        return x_new
